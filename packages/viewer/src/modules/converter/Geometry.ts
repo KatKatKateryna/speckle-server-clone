@@ -1,6 +1,7 @@
 /* eslint-disable camelcase */
 import {
   Box3,
+  BufferAttribute,
   BufferGeometry,
   Float32BufferAttribute,
   InstancedInterleavedBuffer,
@@ -12,7 +13,6 @@ import {
 } from 'three'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { World } from '../World'
-import ObjectWrapper from './ObjectWrapper'
 
 export enum GeometryAttributes {
   POSITION = 'POSITION',
@@ -94,14 +94,15 @@ export class Geometry {
       )
     }
 
-    geometry.computeVertexNormals()
+    // geometry.computeVertexNormals()
+    Geometry.computeVertexNormals(geometry, geometryData.attributes.POSITION)
     geometry.computeBoundingSphere()
     geometry.computeBoundingBox()
 
     World.expandWorld(geometry.boundingBox)
 
     if (Geometry.USE_RTE) {
-      Geometry.updateRTEGeometry(geometry)
+      Geometry.updateRTEGeometry(geometry, geometryData.attributes.POSITION)
     }
 
     return geometry
@@ -132,7 +133,7 @@ export class Geometry {
     }
     geometry.computeBoundingBox()
     if (Geometry.USE_RTE) {
-      Geometry.updateRTEGeometry(geometry)
+      Geometry.updateRTEGeometry(geometry, geometryData.attributes.POSITION)
     }
 
     return geometry
@@ -145,7 +146,7 @@ export class Geometry {
     geometry.computeBoundingBox()
 
     if (Geometry.USE_RTE) {
-      Geometry.updateRTEGeometry(geometry)
+      Geometry.updateRTEGeometry(geometry, geometryData.attributes.POSITION)
     }
     return geometry
   }
@@ -154,18 +155,14 @@ export class Geometry {
    *
    * @param geometry TEMPORARY!!!
    */
-  public static updateRTEGeometry(geometry: BufferGeometry) {
+  public static updateRTEGeometry(geometry: BufferGeometry, rawValues: number[]) {
     if (Geometry.USE_RTE) {
       if (geometry.type === 'BufferGeometry') {
         const position_low = new Float32Array(geometry.attributes.position.array.length)
         const position_high = new Float32Array(
           geometry.attributes.position.array.length
         )
-        Geometry.DoubleToHighLowBuffer(
-          geometry.attributes.position.array,
-          position_low,
-          position_high
-        )
+        Geometry.DoubleToHighLowBuffer(rawValues, position_low, position_high)
         geometry.setAttribute(
           'position_low',
           new Float32BufferAttribute(position_low, 3)
@@ -182,11 +179,7 @@ export class Geometry {
           geometry.attributes.instanceStart.array.length
         )
 
-        Geometry.DoubleToHighLowBuffer(
-          geometry.attributes.instanceStart.array,
-          position_low,
-          position_high
-        )
+        Geometry.DoubleToHighLowBuffer(rawValues, position_low, position_high)
 
         const instanceBufferLow = new InstancedInterleavedBuffer(
           new Float32Array(position_low),
@@ -300,27 +293,27 @@ export class Geometry {
    * @param wrappers TEMPORARY!!!
    * @returns
    */
-  public static applyWorldTransform(wrappers: Array<ObjectWrapper>) {
-    const worldCenter = World.worldBox.getCenter(new Vector3())
-    worldCenter.negate()
-    const transform = new Matrix4().setPosition(worldCenter)
-    World.worldBox.makeEmpty()
-    for (let k = 0; k < wrappers.length; k++) {
-      const wrapper = wrappers[k]
-      if (Array.isArray(wrapper.bufferGeometry)) {
-        Geometry.applyWorldTransform(wrapper.bufferGeometry)
-        return
-      }
-      try {
-        wrapper.bufferGeometry.applyMatrix4(transform)
-        wrapper.bufferGeometry.computeBoundingBox()
-        World.expandWorld(wrapper.bufferGeometry.boundingBox)
-        Geometry.updateRTEGeometry(wrapper.bufferGeometry)
-      } catch (e) {
-        console.warn(e)
-      }
-    }
-  }
+  // public static applyWorldTransform(wrappers: Array<ObjectWrapper>) {
+  //   const worldCenter = World.worldBox.getCenter(new Vector3())
+  //   worldCenter.negate()
+  //   const transform = new Matrix4().setPosition(worldCenter)
+  //   World.worldBox.makeEmpty()
+  //   for (let k = 0; k < wrappers.length; k++) {
+  //     const wrapper = wrappers[k]
+  //     if (Array.isArray(wrapper.bufferGeometry)) {
+  //       Geometry.applyWorldTransform(wrapper.bufferGeometry)
+  //       return
+  //     }
+  //     try {
+  //       wrapper.bufferGeometry.applyMatrix4(transform)
+  //       wrapper.bufferGeometry.computeBoundingBox()
+  //       World.expandWorld(wrapper.bufferGeometry.boundingBox)
+  //       Geometry.updateRTEGeometry(wrapper.bufferGeometry)
+  //     } catch (e) {
+  //       console.warn(e)
+  //     }
+  //   }
+  // }
 
   public static transformGeometryData(geometryData: GeometryData, m: Matrix4) {
     if (!geometryData.attributes.POSITION) return
@@ -358,31 +351,31 @@ export class Geometry {
   public static DoubleToHighLowVector(input: Vector3, low: Vector3, high: Vector3) {
     let doubleValue = input.x
     if (doubleValue >= 0.0) {
-      const doubleHigh = Math.floor(doubleValue / 65536.0) * 65536.0
+      const doubleHigh = new Float32Array([doubleValue])[0] //Math.floor(doubleValue / 65536.0) * 65536.0
       high.x = doubleHigh
       low.x = doubleValue - doubleHigh
     } else {
-      const doubleHigh = Math.floor(-doubleValue / 65536.0) * 65536.0
+      const doubleHigh = new Float32Array([-doubleValue])[0] //Math.floor(-doubleValue / 65536.0) * 65536.0
       high.x = -doubleHigh
       low.x = doubleValue + doubleHigh
     }
     doubleValue = input.y
     if (doubleValue >= 0.0) {
-      const doubleHigh = Math.floor(doubleValue / 65536.0) * 65536.0
+      const doubleHigh = new Float32Array([doubleValue])[0] //Math.floor(doubleValue / 65536.0) * 65536.0
       high.y = doubleHigh
       low.y = doubleValue - doubleHigh
     } else {
-      const doubleHigh = Math.floor(-doubleValue / 65536.0) * 65536.0
+      const doubleHigh = new Float32Array([-doubleValue])[0] //Math.floor(-doubleValue / 65536.0) * 65536.0
       high.y = -doubleHigh
       low.y = doubleValue + doubleHigh
     }
     doubleValue = input.z
     if (doubleValue >= 0.0) {
-      const doubleHigh = Math.floor(doubleValue / 65536.0) * 65536.0
+      const doubleHigh = new Float32Array([doubleValue])[0] //Math.floor(doubleValue / 65536.0) * 65536.0
       high.z = doubleHigh
       low.z = doubleValue - doubleHigh
     } else {
-      const doubleHigh = Math.floor(-doubleValue / 65536.0) * 65536.0
+      const doubleHigh = new Float32Array([-doubleValue])[0] //Math.floor(-doubleValue / 65536.0) * 65536.0
       high.z = -doubleHigh
       low.z = doubleValue + doubleHigh
     }
@@ -396,11 +389,11 @@ export class Geometry {
     for (let k = 0; k < input.length; k++) {
       const doubleValue = input[k]
       if (doubleValue >= 0.0) {
-        const doubleHigh = Math.floor(doubleValue / 65536.0) * 65536.0
+        const doubleHigh = new Float32Array([doubleValue])[0] //Math.floor(doubleValue / 65536.0) * 65536.0
         position_high[k] = doubleHigh
         position_low[k] = doubleValue - doubleHigh
       } else {
-        const doubleHigh = Math.floor(-doubleValue / 65536.0) * 65536.0
+        const doubleHigh = new Float32Array([-doubleValue])[0] //Math.floor(-doubleValue / 65536.0) * 65536.0
         position_high[k] = -doubleHigh
         position_low[k] = doubleValue + doubleHigh
       }
@@ -422,5 +415,90 @@ export class Geometry {
       out[k + 5] = input1[k + 2]
     }
     return out
+  }
+
+  static computeVertexNormals(buffer: BufferGeometry, rawPos: number[]) {
+    const index = buffer.index
+    const positionAttribute = buffer.getAttribute('position')
+
+    if (positionAttribute !== undefined) {
+      let normalAttribute = buffer.getAttribute('normal')
+
+      if (normalAttribute === undefined) {
+        normalAttribute = new BufferAttribute(
+          new Float32Array(positionAttribute.count * 3),
+          3
+        )
+        buffer.setAttribute('normal', normalAttribute)
+      } else {
+        // reset existing normals to zero
+
+        for (let i = 0, il = normalAttribute.count; i < il; i++) {
+          normalAttribute.setXYZ(i, 0, 0, 0)
+        }
+      }
+
+      const pA = new Vector3(),
+        pB = new Vector3(),
+        pC = new Vector3()
+      const nA = new Vector3(),
+        nB = new Vector3(),
+        nC = new Vector3()
+      const cb = new Vector3(),
+        ab = new Vector3()
+
+      // indexed elements
+
+      if (index) {
+        for (let i = 0, il = index.count; i < il; i += 3) {
+          const vA = index.getX(i + 0)
+          const vB = index.getX(i + 1)
+          const vC = index.getX(i + 2)
+
+          // pA.fromBufferAttribute(positionAttribute, vA)
+          // pB.fromBufferAttribute(positionAttribute, vB)
+          // pC.fromBufferAttribute(positionAttribute, vC)
+          pA.fromArray(rawPos, vA * 3)
+          pB.fromArray(rawPos, vB * 3)
+          pC.fromArray(rawPos, vC * 3)
+
+          cb.subVectors(pC, pB)
+          ab.subVectors(pA, pB)
+          cb.cross(ab)
+
+          nA.fromBufferAttribute(normalAttribute, vA)
+          nB.fromBufferAttribute(normalAttribute, vB)
+          nC.fromBufferAttribute(normalAttribute, vC)
+
+          nA.add(cb)
+          nB.add(cb)
+          nC.add(cb)
+
+          normalAttribute.setXYZ(vA, nA.x, nA.y, nA.z)
+          normalAttribute.setXYZ(vB, nB.x, nB.y, nB.z)
+          normalAttribute.setXYZ(vC, nC.x, nC.y, nC.z)
+        }
+      } else {
+        // non-indexed elements (unconnected triangle soup)
+
+        for (let i = 0, il = positionAttribute.count; i < il; i += 3) {
+          pA.fromBufferAttribute(positionAttribute, i + 0)
+          pB.fromBufferAttribute(positionAttribute, i + 1)
+          pC.fromBufferAttribute(positionAttribute, i + 2)
+
+          cb.subVectors(pC, pB)
+          ab.subVectors(pA, pB)
+          cb.cross(ab)
+
+          normalAttribute.setXYZ(i + 0, cb.x, cb.y, cb.z)
+          normalAttribute.setXYZ(i + 1, cb.x, cb.y, cb.z)
+          normalAttribute.setXYZ(i + 2, cb.x, cb.y, cb.z)
+        }
+      }
+
+      buffer.normalizeNormals()
+
+      normalAttribute.needsUpdate = true
+    }
   }
 }
